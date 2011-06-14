@@ -80,7 +80,7 @@ Model.where(query_fragment, *parameters)
     if there are no matches.
     Ex: User.where("name = %s", 'ivan')
 
-Model.where_query(query_fragment, *parameters)
+Model.where_count(query_fragment, *parameters)
     Same as Model.where, but returns a number with the count corresponding
     to number of results returned by query.
 
