@@ -9,7 +9,7 @@ class Property(object):
 
     def __get__(self, model_instance, type):
         if model_instance is None:
-            return self        
+            return self
         try:
             return getattr(model_instance, self._raw_value_name())
         except AttributeError:

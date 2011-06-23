@@ -135,6 +135,24 @@ class ModelTest(unittest.TestCase):
         self.assertEqual('on_update_called', user._for_hook_tests)
         user2 = User(name='ivan', email='myemail@email.com')
     
+    def test_update_attribute(self):
+        """
+        Model.update_attribute should update the field and have no
+        side effects on other model fields.
+        """
+        user = User(name='ivan', email='myemail@email.com')
+        user.save()
+        
+        fetched_user = User.get('name = %s', 'ivan')
+        fetched_user.email = 'changed@email.com'
+        fetched_user.save()
+        
+        user.update_attribute('name', 'newname')
+        self.assertEqual(user.name, 'newname')
+        fetched_user = User.get('name = %s', 'newname')
+        self.assertEqual('changed@email.com', fetched_user.email)
+    
+    
     def test_properties(self):
         """
         A model's properties should be an iterable of only the fields

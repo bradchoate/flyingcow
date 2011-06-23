@@ -1,4 +1,6 @@
 import re
+import logging
+import time
 
 import error
 import db
@@ -89,7 +91,7 @@ class Model(object):
             sql_snippet = ','.join(sql_snippet)
 
             sql = "INSERT INTO %s (%s) VALUES (%s)" % (self._table_name(), ','.join(self.properties()), sql_snippet)
-            self._id = db.connection().execute(sql, *values)
+            self._id = self.execute(sql, *values)
             self.on_create()
         else:
             sql_set_snippets = []
@@ -99,10 +101,21 @@ class Model(object):
                 values.append(getattr(self, property_name))
             sql_set_snippets = ','.join(sql_set_snippets)
             sql = "UPDATE %s SET %s where id = %s" % (self._table_name(), sql_set_snippets, self._id)
-            db.connection().execute(sql, *values)
+            self.execute(sql, *values)
             self.on_update()
         return True
 
+    def update_attribute(self, name, value):
+        """
+        Updates only one field, without impacting the rest.
+        """
+        if name not in self.properties():
+            return False
+        setattr(self, name, value)
+        sql = "UPDATE %s SET %s = %s where id = %s" % (self._table_name(), name, "%s", "%s")
+        self.execute(sql, value, self.id)
+        return True
+    
     def _populate_properties(self, include_id, **kwargs):
         """
         Populates the properties with values, if include_id is passed in,
@@ -145,7 +158,7 @@ class Model(object):
         """
         select = "SELECT * FROM %s WHERE %s" % (cls._table_name(), where_query)
         results = []
-        for result in db.connection().query(select, *args):
+        for result in cls.query(select, *args):
             results.append(cls._make_instance(result))
         return results
     
@@ -155,9 +168,8 @@ class Model(object):
         Runs a select query and returns a list of Model objects or an empty list.
         """
         select = "SELECT count(id) FROM %s WHERE %s" % (cls._table_name(), where_query)
-        results = []
-        result = db.connection().get(select, *args)
-        return result['count(id)']
+        result = cls.query(select, *args)
+        return result[0]['count(id)']
 
     @classmethod
     def object_query(cls, query, *args):
@@ -166,17 +178,32 @@ class Model(object):
         responsibility to include all the fields a model needs.
         """
         results = []
-        for result in db.connection().query(query, *args):
+        for result in cls.query(query, *args):
             results.append(cls._make_instance(result))
         return results
     
     @classmethod
     def query(cls, query, *args):
-      """
-      A raw query that doesn't try to coerce the results into
-      Model objects.
-      """
-      return db.connection().query(query, *args)
+        """
+        A raw query that doesn't try to coerce the results into
+        Model objects.
+        """
+        start_time = time.time()
+        result = db.connection().query(query, *args)
+        query_run_time = (time.time() - start_time) * 1000      
+        logging.debug((query % args) + " [%s ms]" % query_run_time)
+        return result
+     
+    @classmethod
+    def execute(cls, query, *args):
+        """
+        Used for writes and updates, returns row id of last insert.
+        """
+        start_time = time.time()
+        result = db.connection().execute(query, *args)
+        query_run_time = (time.time() - start_time) * 1000      
+        logging.debug((query % args) + " [%s ms]" % query_run_time)
+        return result
     
     @classmethod
     def all(cls, conditions='', *args):
@@ -185,23 +212,23 @@ class Model(object):
         """
         select = "SELECT * FROM %s %s" % (cls._table_name(), conditions)
         results = []
-        for result in db.connection().query(select, *args):
+        for result in cls.query(select, *args):
             results.append(cls._make_instance(result))
         return results
-    
+        
     _properties_cache = None
     @classmethod
     def properties(cls):
-      """Returns a dictionary of all the Properties defined for this model. Caches
-      the result in an class variable."""
-      if cls._properties_cache is not None:
-          return cls._properties_cache
-    
-      cls._properties_cache = []
-      for key in cls.__dict__.keys():
-          if isinstance(cls.__dict__[key], properties.Property):
-              cls._properties_cache.append(key)
-      return cls._properties_cache
+        """Returns a dictionary of all the Properties defined for this model. Caches
+        the result in an class variable."""
+        if cls._properties_cache is not None:
+            return cls._properties_cache
+
+        cls._properties_cache = []
+        for key in cls.__dict__.keys():
+            if isinstance(cls.__dict__[key], properties.Property):
+                cls._properties_cache.append(key)
+        return cls._properties_cache
 
     @classmethod
     def _make_instance(cls, result):
