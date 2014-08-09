@@ -1,8 +1,18 @@
-import tornado.database
+try:
+    import torndb
 
-# db errors aliased for convenience.
-IntegrityError = tornado.database.IntegrityError
-OperationalError = tornado.database.OperationalError
+    # db errors aliased for convenience.
+    IntegrityError = torndb.IntegrityError
+    OperationalError = torndb.OperationalError
+    Connection = torndb.Connection
+except ImportError:
+    import tornado.database
+
+    # db errors aliased for convenience.
+    IntegrityError = tornado.database.IntegrityError
+    OperationalError = tornado.database.OperationalError
+    Connection = tornado.database.Connection
+
 
 class NoConnectionRegistered(Exception):
     """
@@ -18,7 +28,7 @@ class ConnectionManager(object):
         self._connection = None
     
     def register(self, host='localhost', name=None, user=None, password=None):
-        self._connection = tornado.database.Connection(host, name, user, password)
+        self._connection = Connection(host, name, user, password)
         return self._connection
     
     def connection(self):
